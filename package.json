@@ -1,0 +1,27 @@
+{
+  "name": "ai-plagiarism-detector",
+  "version": "1.0.0",
+  "description": "AI Plagiarism & AI Content Detector",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd client && npm install",
+    "server": "nodemon server/index.js",
+    "client": "cd client && npm start",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "seed": "node server/seed.js",
+    "start": "bash start.sh"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "nodemon": "^3.1.7"
+  }
+}
