@@ -1,13 +1,18 @@
 const express = require('express');
 const pool = require('../db');
 const auth = require('../middleware/auth');
-const { callOpenRouter } = require('../openrouter');
+const { callOpenRouter, parseAIJson } = require('../openrouter');
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM citations ORDER BY created_at DESC');
-    res.json(result.rows);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*) FROM citations');
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query('SELECT * FROM citations ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
+    res.json({ data: result.rows, page, limit, total, totalPages: Math.ceil(total / limit) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -53,31 +58,45 @@ router.post('/:id/verify', auth, async (req, res) => {
     const doc = await pool.query('SELECT * FROM citations WHERE id = $1', [req.params.id]);
     if (doc.rows.length === 0) return res.status(404).json({ error: 'Not found' });
 
-    const prompt = `Verify citations in the following document:
-Style: ${doc.rows[0].citation_style}
-Content:
+    const prompt = `Verify citations in the following document. Respond ONLY with valid JSON in this exact format:
+{
+  "citation_quality_score": <number 0-100>,
+  "format_compliance_score": <number 0-100>,
+  "citation_style_detected": "<APA|MLA|Chicago|Harvard|IEEE|Vancouver|mixed|unknown>",
+  "format_errors": [{"citation": "<cited text>", "issue": "<what is wrong>", "correction": "<suggested fix>"}],
+  "missing_citations": ["<claim that lacks a citation>"],
+  "citation_reference_mismatches": ["<description of mismatch>"],
+  "self_plagiarism_indicators": ["<indicator>"],
+  "attribution_issues": ["<issue>"],
+  "well_formatted_citations": <number>,
+  "total_citations_found": <number>,
+  "recommendations": ["<recommendation>"],
+  "overall_assessment": "<summary>"
+}
+
+Citation Style: ${doc.rows[0].citation_style}
+Document Content:
 """
 ${doc.rows[0].content}
 """
 References:
 """
 ${doc.rows[0].references_text || 'None provided'}
-"""
+"""`;
 
-Check:
-1. Citation format correctness
-2. Missing citations for claims
-3. Citation-reference matching
-4. Proper attribution
-5. Self-plagiarism indicators
-6. Overall citation quality score (0-100)`;
-
-    const analysis = await callOpenRouter(prompt, 'You are a citation and reference verification expert.');
+    const rawAnalysis = await callOpenRouter(prompt, 'You are a citation and reference verification expert. Respond ONLY with valid JSON, no markdown.');
+    const parsed = parseAIJson(rawAnalysis);
 
     await pool.query('UPDATE citations SET verification_result = $1, status = $2, verified_at = NOW() WHERE id = $3',
-      [analysis, 'completed', req.params.id]);
+      [typeof parsed === 'object' ? JSON.stringify(parsed) : rawAnalysis, 'completed', req.params.id]);
 
-    res.json({ citation_id: req.params.id, analysis, verified_at: new Date() });
+    // Save to ai_analyses
+    await pool.query(
+      'INSERT INTO ai_analyses (user_id, analysis_type, entity_id, entity_type, result) VALUES ($1, $2, $3, $4, $5)',
+      [req.user.id, 'citation_verification', req.params.id, 'citation', JSON.stringify(parsed || { raw: rawAnalysis })]
+    ).catch(() => {});
+
+    res.json({ citation_id: req.params.id, analysis: parsed || rawAnalysis, verified_at: new Date() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

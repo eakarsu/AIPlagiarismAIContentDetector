@@ -1,13 +1,18 @@
 const express = require('express');
 const pool = require('../db');
 const auth = require('../middleware/auth');
-const { callOpenRouter } = require('../openrouter');
+const { callOpenRouter, parseAIJson } = require('../openrouter');
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM paraphrase_detections ORDER BY created_at DESC');
-    res.json(result.rows);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*) FROM paraphrase_detections');
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query('SELECT * FROM paraphrase_detections ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
+    res.json({ data: result.rows, page, limit, total, totalPages: Math.ceil(total / limit) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -53,7 +58,18 @@ router.post('/:id/detect', auth, async (req, res) => {
     const doc = await pool.query('SELECT * FROM paraphrase_detections WHERE id = $1', [req.params.id]);
     if (doc.rows.length === 0) return res.status(404).json({ error: 'Not found' });
 
-    const prompt = `Compare these two texts for paraphrasing detection:
+    const prompt = `Compare these two texts for paraphrasing detection. Respond ONLY with valid JSON in this exact format:
+{
+  "similarity_score": <number 0-100>,
+  "paraphrase_probability": <number 0-100>,
+  "paraphrasing_techniques": ["<technique used>"],
+  "matching_passages": [{"original": "<excerpt>", "comparison": "<matching excerpt>", "similarity": <number>}],
+  "vocabulary_overlap_percent": <number 0-100>,
+  "structural_similarity": "<high|medium|low>",
+  "verdict": "<likely_paraphrase|possible_paraphrase|original|identical>",
+  "confidence": "<high|medium|low>",
+  "explanation": "<detailed explanation of findings>"
+}
 
 Original Text:
 """
@@ -63,22 +79,25 @@ ${doc.rows[0].original_text}
 Comparison Text:
 """
 ${doc.rows[0].comparison_text}
-"""
+"""`;
 
-Analyze:
-1. Semantic similarity score (0-100%)
-2. Paraphrasing techniques used (synonym replacement, sentence restructuring, etc.)
-3. Side-by-side comparison of similar passages
-4. Originality assessment
-5. Confidence level of paraphrase detection`;
+    const rawAnalysis = await callOpenRouter(prompt, 'You are a paraphrase detection expert. Respond ONLY with valid JSON, no markdown.');
+    const parsed = parseAIJson(rawAnalysis);
 
-    const analysis = await callOpenRouter(prompt, 'You are a paraphrase detection expert.');
+    const similarity = parsed && typeof parsed.similarity_score === 'number'
+      ? Math.round(parsed.similarity_score)
+      : null;
 
-    const similarity = Math.floor(Math.random() * 60 + 20);
     await pool.query('UPDATE paraphrase_detections SET similarity_score = $1, status = $2, analyzed_at = NOW() WHERE id = $3',
       [similarity, 'completed', req.params.id]);
 
-    res.json({ detection_id: req.params.id, analysis, similarity_score: similarity, analyzed_at: new Date() });
+    // Save to ai_analyses
+    await pool.query(
+      'INSERT INTO ai_analyses (user_id, analysis_type, entity_id, entity_type, result) VALUES ($1, $2, $3, $4, $5)',
+      [req.user.id, 'paraphrase_detection', req.params.id, 'paraphrase_detection', JSON.stringify(parsed || { raw: rawAnalysis })]
+    ).catch(() => {});
+
+    res.json({ detection_id: req.params.id, analysis: parsed || rawAnalysis, similarity_score: similarity, analyzed_at: new Date() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

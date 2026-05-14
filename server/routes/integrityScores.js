@@ -1,13 +1,18 @@
 const express = require('express');
 const pool = require('../db');
 const auth = require('../middleware/auth');
-const { callOpenRouter } = require('../openrouter');
+const { callOpenRouter, parseAIJson } = require('../openrouter');
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM integrity_scores ORDER BY created_at DESC');
-    res.json(result.rows);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*) FROM integrity_scores');
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query('SELECT * FROM integrity_scores ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
+    res.json({ data: result.rows, page, limit, total, totalPages: Math.ceil(total / limit) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -53,31 +58,45 @@ router.post('/:id/evaluate', auth, async (req, res) => {
     const doc = await pool.query('SELECT * FROM integrity_scores WHERE id = $1', [req.params.id]);
     if (doc.rows.length === 0) return res.status(404).json({ error: 'Not found' });
 
-    const prompt = `Evaluate the academic integrity of:
+    const prompt = `Evaluate the academic integrity of the following content. Respond ONLY with valid JSON in this exact format:
+{
+  "integrity_score": <number 0-100>,
+  "risk_level": "<low|medium|high|critical>",
+  "violations": ["<violation description>"],
+  "plagiarism_risk": <number 0-100>,
+  "ai_content_probability": <number 0-100>,
+  "citation_quality": <number 0-100>,
+  "writing_consistency": <number 0-100>,
+  "recommendations": ["<recommendation>"],
+  "summary": "<overall assessment>"
+}
+
 Entity: ${doc.rows[0].entity_name}
 Type: ${doc.rows[0].entity_type}
 Content:
 """
 ${doc.rows[0].content}
-"""
+"""`;
 
-Provide:
-1. Overall integrity score (0-100)
-2. Plagiarism risk level
-3. AI content probability
-4. Citation quality
-5. Writing consistency
-6. Detailed breakdown by category
-7. Historical trend analysis
-8. Recommendations for improvement`;
+    const rawAnalysis = await callOpenRouter(prompt, 'You are an academic integrity evaluation expert. Respond ONLY with valid JSON, no markdown.');
 
-    const analysis = await callOpenRouter(prompt, 'You are an academic integrity evaluation expert.');
+    const parsed = parseAIJson(rawAnalysis);
+    const newScore = parsed && typeof parsed.integrity_score === 'number'
+      ? Math.round(parsed.integrity_score)
+      : null;
 
-    const newScore = Math.floor(Math.random() * 40 + 55);
-    await pool.query('UPDATE integrity_scores SET score = $1, evaluation_result = $2, status = $3, evaluated_at = NOW() WHERE id = $4',
-      [newScore, analysis, 'completed', req.params.id]);
+    await pool.query(
+      'UPDATE integrity_scores SET score = $1, evaluation_result = $2, status = $3, evaluated_at = NOW() WHERE id = $4',
+      [newScore, typeof parsed === 'object' ? JSON.stringify(parsed) : rawAnalysis, 'completed', req.params.id]
+    );
 
-    res.json({ score_id: req.params.id, analysis, score: newScore, evaluated_at: new Date() });
+    // Save to ai_analyses
+    await pool.query(
+      'INSERT INTO ai_analyses (user_id, analysis_type, entity_id, entity_type, result) VALUES ($1, $2, $3, $4, $5)',
+      [req.user.id, 'integrity_evaluation', req.params.id, 'integrity_score', JSON.stringify(parsed || { raw: rawAnalysis })]
+    ).catch(() => {});
+
+    res.json({ score_id: req.params.id, analysis: parsed || rawAnalysis, score: newScore, evaluated_at: new Date() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

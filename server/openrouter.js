@@ -10,7 +10,7 @@ async function callOpenRouter(prompt, systemPrompt = '') {
       'X-Title': 'AI Plagiarism Detector',
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
+      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022',
       messages: [
         ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
         { role: 'user', content: prompt },
@@ -29,4 +29,35 @@ async function callOpenRouter(prompt, systemPrompt = '') {
   return data.choices[0].message.content;
 }
 
-module.exports = { callOpenRouter };
+/**
+ * Parse JSON from AI response using 3 strategies:
+ * 1. Direct JSON.parse
+ * 2. Extract from markdown code block
+ * 3. Find first {...} block
+ */
+function parseAIJson(content) {
+  // Strategy 1: direct parse
+  try {
+    return JSON.parse(content);
+  } catch {}
+
+  // Strategy 2: extract from markdown code block
+  const blockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (blockMatch) {
+    try {
+      return JSON.parse(blockMatch[1].trim());
+    } catch {}
+  }
+
+  // Strategy 3: find first { ... } block
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch {}
+  }
+
+  return null;
+}
+
+module.exports = { callOpenRouter, parseAIJson };

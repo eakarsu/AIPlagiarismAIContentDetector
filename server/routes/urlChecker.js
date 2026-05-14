@@ -1,13 +1,18 @@
 const express = require('express');
 const pool = require('../db');
 const auth = require('../middleware/auth');
-const { callOpenRouter } = require('../openrouter');
+const { callOpenRouter, parseAIJson } = require('../openrouter');
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM url_checks ORDER BY created_at DESC');
-    res.json(result.rows);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*) FROM url_checks');
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query('SELECT * FROM url_checks ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]);
+    res.json({ data: result.rows, page, limit, total, totalPages: Math.ceil(total / limit) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -53,27 +58,42 @@ router.post('/:id/check', auth, async (req, res) => {
     const doc = await pool.query('SELECT * FROM url_checks WHERE id = $1', [req.params.id]);
     if (doc.rows.length === 0) return res.status(404).json({ error: 'Not found' });
 
-    const prompt = `Analyze this URL for potential plagiarism and content authenticity:
+    const prompt = `Analyze this URL for content authenticity and trustworthiness. Respond ONLY with valid JSON in this exact format:
+{
+  "trust_score": <number 0-100>,
+  "originality_assessment": "<highly original|somewhat original|potentially duplicate|likely duplicate>",
+  "domain_reputation": "<trusted|neutral|suspicious|unknown>",
+  "content_type_assessment": "<news|academic|blog|commercial|social_media|unknown>",
+  "freshness_indicators": "<likely fresh|possibly outdated|likely recycled>",
+  "spam_indicators": ["<indicator if any>"],
+  "red_flags": ["<red flag if any>"],
+  "positive_signals": ["<positive signal>"],
+  "recommended_action": "<use as source|verify independently|avoid|bookmark for review>",
+  "explanation": "<detailed explanation>"
+}
+
 URL: ${doc.rows[0].url}
-Description: ${doc.rows[0].description || 'N/A'}
+Description: ${doc.rows[0].description || 'N/A'}`;
 
-Provide:
-- Content originality assessment
-- Potential duplicate sources
-- Domain reputation analysis
-- Content freshness indicators
-- SEO spam indicators
-- Overall trust score (0-100)`;
+    const rawAnalysis = await callOpenRouter(prompt, 'You are a web content authenticity analyzer. Respond ONLY with valid JSON, no markdown.');
+    const parsed = parseAIJson(rawAnalysis);
 
-    const analysis = await callOpenRouter(prompt, 'You are a web content authenticity analyzer.');
+    const trustScore = parsed && typeof parsed.trust_score === 'number'
+      ? Math.round(parsed.trust_score)
+      : null;
 
-    const trustScore = Math.floor(Math.random() * 50 + 40);
     await pool.query(
       'UPDATE url_checks SET trust_score = $1, status = $2, checked_at = NOW() WHERE id = $3',
       [trustScore, 'completed', req.params.id]
     );
 
-    res.json({ url_check_id: req.params.id, analysis, trust_score: trustScore, checked_at: new Date() });
+    // Save to ai_analyses
+    await pool.query(
+      'INSERT INTO ai_analyses (user_id, analysis_type, entity_id, entity_type, result) VALUES ($1, $2, $3, $4, $5)',
+      [req.user.id, 'url_check', req.params.id, 'url_check', JSON.stringify(parsed || { raw: rawAnalysis })]
+    ).catch(() => {});
+
+    res.json({ url_check_id: req.params.id, analysis: parsed || rawAnalysis, trust_score: trustScore, checked_at: new Date() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
