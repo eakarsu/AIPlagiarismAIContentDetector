@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:3000',
   credentials: true,
@@ -55,6 +55,7 @@ app.use('/api/integrity-scores', aiRateLimiter, require('./routes/integrityScore
 app.use('/api/submissions', require('./routes/submissions'));
 app.use('/api/api-keys', require('./routes/apiKeys'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/originality-risk', require('./routes/originalityRisk'));
 
 // New AI tool routes
 const aiTools = require('./routes/aiTools');
@@ -110,6 +111,17 @@ app.use('/api/gap-limited-analytics-trends-across-courses-cohorts', require('./r
 app.use('/api/gap-webhook-scaffolding-present-but-not-wired-end', require('./routes/gapFeat_webhook_scaffolding_present_but_not_wired_end'));
 app.use('/api/gap-no-notifications-module-grep-only-1', require('./routes/gapFeat_no_notifications_module_grep_only_1'));
 app.use('/api/gap-only-7-frontend-pages-for-16', require('./routes/gapFeat_only_7_frontend_pages_for_16'));
+
+// Serve client build (production static)
+const path = require('path');
+const fs = require('fs');
+const buildDir = path.join(__dirname, '..', 'client', 'build');
+if (fs.existsSync(buildDir)) {
+  app.use(express.static(buildDir));
+  app.get(/^\/(?!api\/).*/, (req, res) => {
+    res.sendFile(path.join(buildDir, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
