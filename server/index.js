@@ -115,7 +115,7 @@ app.use('/api/gap-only-7-frontend-pages-for-16', require('./routes/gapFeat_only_
 // Serve client build (production static)
 const path = require('path');
 const fs = require('fs');
-const buildDir = path.join(__dirname, '..', 'client', 'build');
+const buildDir = path.join(__dirname, '..', 'web', 'build');
 if (fs.existsSync(buildDir)) {
   app.use(express.static(buildDir));
   app.get(/^\/(?!api\/).*/, (req, res) => {
