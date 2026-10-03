@@ -1,3 +1,4 @@
+import WorkflowSidebar from './WorkflowSidebar';
 import { useEffect, useState } from 'react';
 import './App.css';
 
@@ -36,8 +37,8 @@ export default function App() {
   if (!user) return <main className="login-shell"><form className="login-card" onSubmit={handleLogin}><p className="eyebrow">{PRODUCT_NAME}</p><h1>Sign in to your workspace</h1><p className="lede">Use the provisioned local account to continue.</p>{error && <p className="form-error" role="alert">{error}</p>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="username" /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /></label><button className="demo-button" type="button" onClick={fillDemoCredentials} disabled={busy}>Auto Fill Demo Credentials</button><button className="primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : 'Sign In'}</button></form></main>;
 
   return (
-    <main className="shell">
-      <section className="hero">
+    <div className="codex-nav-shell"><WorkflowSidebar title="Plagiarism AIContentDetector" features={FEATURES} /><main className="shell">
+      <section className="hero" id="overview">
         <p className="eyebrow">Restored application boundary</p>
         <h1>AI Plagiarism & AI Content Detector</h1>
         <p className="lede">This checked-in UI exposes the primary workflow boundary without presenting generated screens as completed execution.</p>
@@ -51,7 +52,7 @@ export default function App() {
         <h2 id="workflow-heading">Primary workflow</h2>
         <div className="workflow">
           {FEATURES.map((feature, index) => (
-            <article key={feature}>
+            <article key={feature} id={`step-${index + 1}`}>
               <strong>{String(index + 1).padStart(2, '0')}</strong>
               <h3>{feature}</h3>
               <p>Backend integration and validation remain required before this step can execute in production.</p>
@@ -59,6 +60,6 @@ export default function App() {
           ))}
         </div>
       </section>
-    </main>
+    </main></div>
   );
 }
