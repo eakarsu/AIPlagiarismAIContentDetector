@@ -1,0 +1,211 @@
+{
+  "title": "Plagiarism AIContent Detector",
+  "features": [
+    {
+      "id": "ai-compare-documents",
+      "endpoint": "/api/ai/compare-documents",
+      "title": "Compare documents",
+      "description": "Review native inputs and source evidence before generating. Examples are illustrative and require your review.",
+      "fields": [
+        {
+          "key": "text1",
+          "type": "text",
+          "required": true,
+          "label": "Text1",
+          "presets": [
+            "The campus garden collected rainwater in two storage barrels. Volunteers measured soil moisture each Friday and watered only when the top layer was dry. After eight weeks, weekly water use fell from 120 to 85 liters; the team recorded rainfall to help explain the change.",
+            "Our library extended evening hours during the exam period. We surveyed 46 students, of whom 31 preferred a quiet study space after 8 p.m. Attendance rose during the first week, but the short trial does not establish whether the effect will persist.",
+            "A neighborhood repair workshop fixed 18 bicycles in April. Residents supplied replacement parts, while volunteers taught brake adjustment and tire repair. The next workshop will track how many bicycles are still in use after three months."
+          ],
+          "manual": false
+        },
+        {
+          "key": "text2",
+          "type": "text",
+          "required": true,
+          "label": "Text2",
+          "presets": [
+            "Volunteers in the university garden stored rainfall in a pair of barrels. Every Friday they checked soil moisture before watering. Water use dropped from 120 to 85 liters per week over an eight-week period, though rainfall also changed.",
+            "The library stayed open later for exams. A survey of 46 students found that 31 wanted quiet evening study space. More students attended the first week; a longer observation period is needed to assess the lasting impact.",
+            "In April, a community event repaired eighteen bikes using parts brought by residents. Volunteers demonstrated tire repairs and brake adjustments. Organizers plan to ask participants whether the bikes remain in use three months later."
+          ],
+          "manual": false
+        },
+        {
+          "key": "title1",
+          "type": "text",
+          "required": false,
+          "label": "Title1",
+          "presets": [
+            "Garden water use: original notes",
+            "Library hours: survey report",
+            "Bicycle repair: organizer report"
+          ],
+          "manual": false
+        },
+        {
+          "key": "title2",
+          "type": "text",
+          "required": false,
+          "label": "Title2",
+          "presets": [
+            "Garden water use: rewritten summary",
+            "Library hours: student newsletter",
+            "Bicycle repair: rewritten summary"
+          ],
+          "manual": false
+        }
+      ],
+      "source": {
+        "file": "server/routes/aiTools.js",
+        "line": 30
+      }
+    },
+    {
+      "id": "ai-batch",
+      "endpoint": "/api/ai/batch",
+      "title": "Batch",
+      "description": "Review native inputs and source evidence before generating. Examples are illustrative and require your review.",
+      "fields": [
+        {
+          "key": "texts",
+          "type": "json",
+          "required": false,
+          "label": "Texts",
+          "presets": [
+            [
+              "The campus garden collected rainwater in two storage barrels. Volunteers measured soil moisture each Friday and watered only when the top layer was dry. After eight weeks, weekly water use fell from 120 to 85 liters; the team recorded rainfall to help explain the change.",
+              "Volunteers in the university garden stored rainfall in a pair of barrels. Every Friday they checked soil moisture before watering. Water use dropped from 120 to 85 liters per week over an eight-week period, though rainfall also changed."
+            ],
+            [
+              "Our library extended evening hours during the exam period. We surveyed 46 students, of whom 31 preferred a quiet study space after 8 p.m. Attendance rose during the first week, but the short trial does not establish whether the effect will persist.",
+              "The library stayed open later for exams. A survey of 46 students found that 31 wanted quiet evening study space. More students attended the first week; a longer observation period is needed to assess the lasting impact."
+            ],
+            [
+              "A neighborhood repair workshop fixed 18 bicycles in April. Residents supplied replacement parts, while volunteers taught brake adjustment and tire repair. The next workshop will track how many bicycles are still in use after three months.",
+              "In April, a community event repaired eighteen bikes using parts brought by residents. Volunteers demonstrated tire repairs and brake adjustments. Organizers plan to ask participants whether the bikes remain in use three months later."
+            ]
+          ],
+          "manual": false
+        },
+        {
+          "key": "job_title",
+          "type": "text",
+          "required": false,
+          "label": "Job title",
+          "presets": [
+            "Campus garden integrity review",
+            "Exam study space comparison",
+            "Community repair report review"
+          ],
+          "manual": false
+        }
+      ],
+      "source": {
+        "file": "server/routes/aiTools.js",
+        "line": 93
+      }
+    },
+    {
+      "id": "ai-check-citations",
+      "endpoint": "/api/ai/check-citations",
+      "title": "Check citations",
+      "description": "Review native inputs and source evidence before generating. Examples are illustrative and require your review.",
+      "fields": [
+        {
+          "key": "text",
+          "type": "text",
+          "required": true,
+          "label": "Text",
+          "presets": [
+            "A fictional classroom study reported lower water use after rainfall storage (Morgan, 2024). Reference: Morgan, A. (2024). Rainwater storage in a campus garden. Example Learning Press. This reference is invented for a formatting exercise.",
+            "A fictional library study describes student demand for evening study space (Rivera 12). Works cited: Rivera, Jordan. Evening Study Spaces. Example Learning Press, 2023. This reference is invented for a formatting exercise.",
+            "A fictional workshop report summarizes bicycle repairs.1\n1. Casey Lee, Community Repair Workshops (Boston: Example Learning Press, 2025), 18. This reference is invented for a formatting exercise."
+          ],
+          "manual": false
+        },
+        {
+          "key": "citation_style",
+          "type": "text",
+          "required": false,
+          "label": "Citation style",
+          "presets": [
+            "APA",
+            "MLA",
+            "Chicago"
+          ],
+          "manual": false
+        }
+      ],
+      "source": {
+        "file": "server/routes/aiTools.js",
+        "line": 157
+      }
+    },
+    {
+      "id": "ai-style-fingerprint",
+      "endpoint": "/api/ai/style-fingerprint",
+      "title": "Style fingerprint",
+      "description": "Review native inputs and source evidence before generating. Examples are illustrative and require your review.",
+      "fields": [
+        {
+          "key": "text",
+          "type": "text",
+          "required": true,
+          "label": "Text",
+          "presets": [
+            "The campus garden collected rainwater in two storage barrels. Volunteers measured soil moisture each Friday and watered only when the top layer was dry. After eight weeks, weekly water use fell from 120 to 85 liters; the team recorded rainfall to help explain the change.",
+            "Our library extended evening hours during the exam period. We surveyed 46 students, of whom 31 preferred a quiet study space after 8 p.m. Attendance rose during the first week, but the short trial does not establish whether the effect will persist.",
+            "A neighborhood repair workshop fixed 18 bicycles in April. Residents supplied replacement parts, while volunteers taught brake adjustment and tire repair. The next workshop will track how many bicycles are still in use after three months."
+          ],
+          "manual": false
+        },
+        {
+          "key": "author_name",
+          "type": "text",
+          "required": false,
+          "label": "Author name",
+          "presets": [
+            "Alex Morgan (fictional sample)",
+            "Jordan Rivera (fictional sample)",
+            "Casey Lee (fictional sample)"
+          ],
+          "manual": false
+        }
+      ],
+      "source": {
+        "file": "server/routes/aiTools.js",
+        "line": 207
+      }
+    }
+  ],
+  "resources": [
+    {
+      "key": "documents",
+      "endpoint": "/api/documents",
+      "label": "Documents",
+      "fields": [
+        "title",
+        "content",
+        "author",
+        "source_type"
+      ],
+      "updateFields": [
+        "title",
+        "content",
+        "author",
+        "source_type"
+      ],
+      "delete": true,
+      "source": "server/routes/documents.js"
+    },
+    {
+      "key": "ai_history",
+      "endpoint": "/api/ai/history?limit=100",
+      "label": "Saved AI reports",
+      "fields": [],
+      "delete": false,
+      "reportField": "result"
+    }
+  ]
+}

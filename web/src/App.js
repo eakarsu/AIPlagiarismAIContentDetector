@@ -1,3 +1,6 @@
+import { useRef as useDemoLoginRef, useState as useDemoLoginState } from 'react';
+import NativeWorkflowStudio from './NativeWorkflowStudio';
+import nativeWorkflowConfig from './nativeWorkflowConfig.json';
 import WorkflowSidebar from './WorkflowSidebar';
 import { useEffect, useState } from 'react';
 import './App.css';
@@ -13,7 +16,12 @@ const API_BASE = typeof window === 'undefined' ? configuredApiBase : configuredA
 
 async function api(path, options = {}) { const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...options.headers } }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || body.message || `Request failed with HTTP ${response.status}`); return body; }
 
+function authenticatedNativeRequest(path, options = {}) { return api(path, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` } }); }
+
 export default function App() {
+  const demoLoginLock = useDemoLoginRef(false);
+  const [demoLoginBusy, setDemoLoginBusy] = useDemoLoginState(false);
+
   const [service, setService] = useState({ status: 'loading', detail: 'Checking the API boundary…' });
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [user, setUser] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
 
@@ -33,8 +41,20 @@ export default function App() {
   const fillDemoCredentials = async () => { setError(''); setBusy(true); try { const credentials = await api('/api/auth/demo-credentials'); setEmail(credentials.email); setPassword(credentials.password)
 
 } catch (requestError) { setError(requestError.message); } finally { setBusy(false); } };
-  const handleLogin = async (event) => { event.preventDefault(); setError(''); setBusy(true); try { const result = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }); localStorage.setItem('authToken', result.token); const identity = await api('/api/auth/me', { headers: { Authorization: `Bearer ${result.token}` } }); setUser(identity.user || identity); } catch (requestError) { localStorage.removeItem('authToken'); setError(requestError.message); } finally { setBusy(false); } };
-  if (!user) return <main className="login-shell"><form className="login-card" onSubmit={handleLogin}><p className="eyebrow">{PRODUCT_NAME}</p><h1>Sign in to your workspace</h1><p className="lede">Use the provisioned local account to continue.</p>{error && <p className="form-error" role="alert">{error}</p>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="username" /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /></label><button className="demo-button" type="button" onClick={fillDemoCredentials} disabled={busy}>Auto Fill Demo Credentials</button><button className="primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : 'Sign In'}</button></form></main>;
+  const handleLogin = async (event, demoLoginCredentials) => { event.preventDefault(); setError(''); setBusy(true); try { const result = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: (demoLoginCredentials?.email ?? email), password: (demoLoginCredentials?.password ?? password) }) }); localStorage.setItem('authToken', result.token); const identity = await api('/api/auth/me', { headers: { Authorization: `Bearer ${result.token}` } }); setUser(identity.user || identity); } catch (requestError) { localStorage.removeItem('authToken'); setError(requestError.message); } finally { setBusy(false); } };
+  if (!user) return <main className="login-shell"><form className="login-card" onSubmit={handleLogin}><p className="eyebrow">{PRODUCT_NAME}</p><h1>Sign in to your workspace</h1><p className="lede">Use the provisioned local account to continue.</p>{error && <p className="form-error" role="alert">{error}</p>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="username" /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /></label><button className="demo-button" type="button" onClick={async (event) => {
+ if (demoLoginLock.current) return;
+ demoLoginLock.current = true; setDemoLoginBusy(true);
+ const values = {};
+ const captureDemoValue = (key, value) => { values[key] = value; return value; };
+ try {
+  await (async () => { setError(captureDemoValue("error", '')); setBusy(true); try { const credentials = await api('/api/auth/demo-credentials'); setEmail(captureDemoValue("email", credentials.email)); setPassword(captureDemoValue("password", credentials.password))
+
+} catch (requestError) { setError(captureDemoValue("error", requestError.message)); } finally { setBusy(false); } })(event);
+  if (values.error || typeof values.email !== 'string' || !values.email || typeof values.password !== 'string' || !values.password) { setError(typeof values.error === 'string' ? values.error : 'Demo credentials are unavailable.'); return; }
+  await handleLogin(event, { email: values.email, password: values.password });
+ } finally { demoLoginLock.current = false; setDemoLoginBusy(false); }
+}} disabled={demoLoginBusy || (busy)}>Log In as Demo</button><button className="primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : 'Sign In'}</button></form></main>;
 
   return (
     <div className="codex-nav-shell"><WorkflowSidebar title="Plagiarism AIContentDetector" features={FEATURES} /><main className="shell">
@@ -60,6 +80,6 @@ export default function App() {
           ))}
         </div>
       </section>
-    </main></div>
+    <NativeWorkflowStudio config={nativeWorkflowConfig} request={authenticatedNativeRequest} /></main></div>
   );
 }
